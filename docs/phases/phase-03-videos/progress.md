@@ -1,11 +1,11 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 0/12 completed
+**SIs:** 1/12 completed
 
 ### SI-03.1 — Setup de Infraestrutura (MinIO, Redis, Dockerfile e Configs)
-- **Status:** pending
-- **Tests:** no tests
+- **Status:** completed
+- **Tests:** 17 passing
 - **Observations:** none
 
 ### SI-03.2 — StorageModule (Integração S3/MinIO e Presigning)
