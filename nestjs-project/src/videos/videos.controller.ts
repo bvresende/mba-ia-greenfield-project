@@ -6,7 +6,9 @@ import {
   HttpStatus,
   Param,
   Post,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -15,6 +17,7 @@ import {
   getSchemaPath,
 } from '@nestjs/swagger';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { Public } from '../auth/decorators/public.decorator';
 import type { JwtPayload } from '../auth/auth.types';
 import {
   VideosService,
@@ -22,6 +25,7 @@ import {
   GetPartUrlsResponse,
   ListUploadedPartsResponse,
   CompleteUploadResponse,
+  VideoMetadataResponse,
 } from './videos.service';
 import { CreateVideoDto } from './dto/create-video.dto';
 import { GetPartUrlsDto } from './dto/get-part-urls.dto';
@@ -211,5 +215,110 @@ export class VideosController {
   ): Promise<CompleteUploadResponse> {
     return this.videosService.completeUpload(user.sub, slug, dto);
   }
-}
 
+  @Get(':slug/stream')
+  @Public()
+  @ApiOperation({
+    summary: 'Stream video via 302 Found redirect to presigned storage URL',
+    description:
+      'Redirects to a short-lived presigned URL with inline disposition, allowing Range requests for streaming.',
+  })
+  @ApiResponse({
+    status: 302,
+    description: 'Found: redirect to presigned stream URL',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Video not found or not in streamable status',
+    schema: { $ref: getSchemaPath(ApiErrorEnvelope) },
+  })
+  async stream(
+    @Param('slug') slug: string,
+    @CurrentUser() user: JwtPayload | undefined,
+    @Res() res: Response,
+  ): Promise<void> {
+    const url = await this.videosService.getStreamUrl(slug, user?.sub);
+    res.redirect(HttpStatus.FOUND, url);
+  }
+
+  @Get(':slug/download')
+  @Public()
+  @ApiOperation({
+    summary: 'Download video via 302 Found redirect to presigned storage URL',
+    description:
+      'Redirects to a presigned URL with attachment disposition and video title as filename.',
+  })
+  @ApiResponse({
+    status: 302,
+    description: 'Found: redirect to presigned download URL',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Video not found or not in READY status',
+    schema: { $ref: getSchemaPath(ApiErrorEnvelope) },
+  })
+  async download(
+    @Param('slug') slug: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const url = await this.videosService.getDownloadUrl(slug);
+    res.redirect(HttpStatus.FOUND, url);
+  }
+
+  @Get(':slug/thumbnail')
+  @Public()
+  @ApiOperation({
+    summary: 'Get video thumbnail via 302 Found redirect',
+    description:
+      'Redirects to presigned or public URL of the generated video thumbnail image.',
+  })
+  @ApiResponse({
+    status: 302,
+    description: 'Found: redirect to thumbnail image',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Thumbnail not found or video not in READY status',
+    schema: { $ref: getSchemaPath(ApiErrorEnvelope) },
+  })
+  async thumbnail(
+    @Param('slug') slug: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    const url = await this.videosService.getThumbnailUrl(slug);
+    res.redirect(HttpStatus.FOUND, url);
+  }
+
+  @Get(':slug')
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: 'Get video metadata and status',
+    description:
+      'Returns technical and descriptive metadata for the specified video. Restricted to channel owner.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Video metadata retrieved successfully',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Missing or invalid access token',
+    schema: { $ref: getSchemaPath(ApiErrorEnvelope) },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'User does not own this video',
+    schema: { $ref: getSchemaPath(ApiErrorEnvelope) },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Video not found',
+    schema: { $ref: getSchemaPath(ApiErrorEnvelope) },
+  })
+  async getMetadata(
+    @CurrentUser() user: JwtPayload,
+    @Param('slug') slug: string,
+  ): Promise<VideoMetadataResponse> {
+    return this.videosService.getMetadata(user.sub, slug);
+  }
+}

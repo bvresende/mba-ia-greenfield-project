@@ -24,7 +24,6 @@ describe('VideoProcessor (integration)', () => {
   let dataSource: DataSource;
   let videoRepository: Repository<Video>;
   let userRepository: Repository<User>;
-  let channelRepository: Repository<Channel>;
   let channelsService: ChannelsService;
   let storageService: StorageService;
   let mediaProbeService: MediaProbeService;
@@ -38,7 +37,6 @@ describe('VideoProcessor (integration)', () => {
     await dataSource.initialize();
     videoRepository = dataSource.getRepository(Video);
     userRepository = dataSource.getRepository(User);
-    channelRepository = dataSource.getRepository(Channel);
     channelsService = new ChannelsService(dataSource);
 
     const sCfg = storageConfig();
@@ -84,7 +82,10 @@ describe('VideoProcessor (integration)', () => {
   });
 
   let counter = 0;
-  async function createUserAndChannel(): Promise<{ user: User; channel: Channel }> {
+  async function createUserAndChannel(): Promise<{
+    user: User;
+    channel: Channel;
+  }> {
     const user = await userRepository.save(
       userRepository.create({
         email: `proc_test_${++counter}@example.com`,
@@ -113,7 +114,11 @@ describe('VideoProcessor (integration)', () => {
 
     // Upload video file into MinIO at video.storage_key
     const fileBuffer = fs.readFileSync(tempMp4);
-    await storageService.uploadBuffer(video.storage_key, fileBuffer, 'video/mp4');
+    await storageService.uploadBuffer(
+      video.storage_key,
+      fileBuffer,
+      'video/mp4',
+    );
 
     const job = {
       id: video.id,

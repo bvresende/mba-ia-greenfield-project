@@ -87,7 +87,9 @@ export class Video {
   @UpdateDateColumn({ type: 'timestamptz' })
   updated_at: Date;
 
-  @ManyToOne(() => Channel, (channel) => channel.videos, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Channel, (channel) => channel.videos, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'channel_id' })
   channel: Channel;
 }

@@ -70,4 +70,3 @@ export class ChannelsService {
     return repository.findOne({ where: { id } });
   }
 }
-

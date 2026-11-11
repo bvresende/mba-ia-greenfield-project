@@ -20,7 +20,13 @@ describe('VideosModule', () => {
       imports: [
         ConfigModule.forRoot({
           isGlobal: true,
-          load: [appConfig, authConfig, storageConfig, redisConfig, videoConfig],
+          load: [
+            appConfig,
+            authConfig,
+            storageConfig,
+            redisConfig,
+            videoConfig,
+          ],
         }),
         TypeOrmModule.forRoot(createTestDataSource(ALL_ENTITIES).options),
         BullModule.forRootAsync({

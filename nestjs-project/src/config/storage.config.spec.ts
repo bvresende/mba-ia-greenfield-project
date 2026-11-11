@@ -14,7 +14,9 @@ const loadConfig = async (
     ],
   }).compile();
 
-  const config = module.get<ConfigType<typeof storageConfig>>(storageConfig.KEY);
+  const config = module.get<ConfigType<typeof storageConfig>>(
+    storageConfig.KEY,
+  );
   await module.close();
   process.env = originalEnv;
   return config;

@@ -73,4 +73,3 @@ describe('envValidationSchema — Storage & Redis', () => {
     expect(value.VIDEO_MAX_FILE_SIZE_BYTES).toBe(10737418240);
   });
 });
-

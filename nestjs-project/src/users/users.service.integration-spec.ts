@@ -1,6 +1,4 @@
 import { DataSource, Repository } from 'typeorm';
-import { RefreshToken } from '../auth/entities/refresh-token.entity';
-import { VerificationToken } from '../auth/entities/verification-token.entity';
 import { Channel } from '../channels/entities/channel.entity';
 import { ChannelsService } from '../channels/channels.service';
 import {

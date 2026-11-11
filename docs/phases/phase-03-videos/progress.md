@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 9/12 completed
+**SIs:** 10/12 completed
 
 ### SI-03.1 — Setup de Infraestrutura (MinIO, Redis, Dockerfile e Configs)
 - **Status:** completed
@@ -49,8 +49,8 @@
 - **Observations:** none
 
 ### SI-03.10 — Endpoints de Streaming, Download, Thumbnail e Metadados
-- **Status:** pending
-- **Tests:** no tests
+- **Status:** completed
+- **Tests:** 29 passing
 - **Observations:** none
 
 ### SI-03.11 — Teste E2E do Pipeline Completo de Vídeo

@@ -78,7 +78,9 @@ export class VideoProcessor extends WorkerHost {
       video.processing_error = null;
 
       await this.videoRepository.save(video);
-      this.logger.log(`Video ${videoId} successfully processed and marked READY`);
+      this.logger.log(
+        `Video ${videoId} successfully processed and marked READY`,
+      );
     } catch (error: any) {
       this.logger.error(
         `Failed processing video ${videoId}: ${error.message}`,

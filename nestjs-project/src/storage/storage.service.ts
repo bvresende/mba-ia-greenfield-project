@@ -66,7 +66,9 @@ export class StorageService implements OnModuleInit {
     try {
       await this.ensureBucketExists();
     } catch (error) {
-      this.logger.warn(`Could not ensure bucket on startup: ${(error as Error).message}`);
+      this.logger.warn(
+        `Could not ensure bucket on startup: ${(error as Error).message}`,
+      );
     }
   }
 
@@ -81,7 +83,9 @@ export class StorageService implements OnModuleInit {
         err?.name === 'NoSuchBucket';
       if (isNotFound) {
         this.logger.log(`Bucket "${bucket}" not found. Creating it now...`);
-        await this.internalClient.send(new CreateBucketCommand({ Bucket: bucket }));
+        await this.internalClient.send(
+          new CreateBucketCommand({ Bucket: bucket }),
+        );
         this.logger.log(`Bucket "${bucket}" created successfully.`);
       } else {
         throw err;
@@ -176,7 +180,11 @@ export class StorageService implements OnModuleInit {
     options: PresignedGetUrlOptions = {},
     useInternalClient = false,
   ): Promise<string> {
-    const { disposition = 'inline', filename, expiresInSeconds = 7200 } = options;
+    const {
+      disposition = 'inline',
+      filename,
+      expiresInSeconds = 7200,
+    } = options;
     const client = useInternalClient ? this.internalClient : this.presignClient;
 
     const contentDisposition =
@@ -193,7 +201,11 @@ export class StorageService implements OnModuleInit {
     return getSignedUrl(client, command, { expiresIn: expiresInSeconds });
   }
 
-  async uploadBuffer(key: string, buffer: Buffer, mimeType: string): Promise<void> {
+  async uploadBuffer(
+    key: string,
+    buffer: Buffer,
+    mimeType: string,
+  ): Promise<void> {
     await this.internalClient.send(
       new PutObjectCommand({
         Bucket: this.bucket,

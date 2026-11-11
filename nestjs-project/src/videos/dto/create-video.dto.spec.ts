@@ -18,7 +18,8 @@ describe('CreateVideoDto', () => {
   });
 
   it('should pass validation without optional description', async () => {
-    const { description, ...rest } = validData;
+    const rest = { ...validData };
+    delete (rest as any).description;
     const dto = plainToInstance(CreateVideoDto, rest);
     const errors = await validate(dto);
     expect(errors.length).toBe(0);

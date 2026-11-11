@@ -91,4 +91,3 @@ describe('Database migrations (integration)', () => {
     expect(result).toHaveLength(0);
   });
 });
-

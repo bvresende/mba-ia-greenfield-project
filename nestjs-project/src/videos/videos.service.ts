@@ -63,6 +63,26 @@ export interface VideoProcessingJobData {
   videoId: string;
 }
 
+export interface VideoMetadataResponse {
+  id: string;
+  slug: string;
+  title: string;
+  description: string | null;
+  original_filename: string;
+  file_size_bytes: number;
+  mime_type: string;
+  duration_seconds: number | null;
+  width: number | null;
+  height: number | null;
+  bitrate: number | null;
+  codec: string | null;
+  status: VideoStatus;
+  processing_error: string | null;
+  channel_id: string;
+  created_at: Date;
+  updated_at: Date;
+}
+
 @Injectable()
 export class VideosService {
   constructor(
@@ -237,6 +257,89 @@ export class VideosService {
       slug: video.slug,
       status: video.status,
       message: 'Upload completed and processing initiated',
+    };
+  }
+
+  async getStreamUrl(slug: string, userId?: string): Promise<string> {
+    const video = await this.findBySlug(slug);
+    if (!video) {
+      throw new VideoNotFoundException();
+    }
+
+    if (video.status === VideoStatus.READY) {
+      return this.storageService.getPresignedGetUrl(video.storage_key, {
+        disposition: 'inline',
+        expiresInSeconds: 3600,
+      });
+    }
+
+    if (video.status === VideoStatus.PROCESSING && userId) {
+      const channel = await this.channelsService.findByUserId(userId);
+      if (channel && channel.id === video.channel_id) {
+        return this.storageService.getPresignedGetUrl(video.storage_key, {
+          disposition: 'inline',
+          expiresInSeconds: 3600,
+        });
+      }
+    }
+
+    throw new VideoNotFoundException();
+  }
+
+  async getDownloadUrl(slug: string): Promise<string> {
+    const video = await this.findBySlug(slug);
+    if (!video || video.status !== VideoStatus.READY) {
+      throw new VideoNotFoundException();
+    }
+
+    const ext = video.original_filename.includes('.')
+      ? video.original_filename.split('.').pop()
+      : 'mp4';
+    const safeTitle = video.title.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const filename = `${safeTitle}.${ext}`;
+
+    return this.storageService.getPresignedGetUrl(video.storage_key, {
+      disposition: 'attachment',
+      filename,
+      expiresInSeconds: 3600,
+    });
+  }
+
+  async getThumbnailUrl(slug: string): Promise<string> {
+    const video = await this.findBySlug(slug);
+    if (!video || !video.thumbnail_key || video.status !== VideoStatus.READY) {
+      throw new VideoNotFoundException();
+    }
+
+    return this.storageService.getPresignedGetUrl(video.thumbnail_key, {
+      disposition: 'inline',
+      expiresInSeconds: 3600,
+    });
+  }
+
+  async getMetadata(
+    userId: string,
+    slug: string,
+  ): Promise<VideoMetadataResponse> {
+    const video = await this.getOwnedVideo(userId, slug);
+    return {
+      id: video.id,
+      slug: video.slug,
+      title: video.title,
+      description: video.description,
+      original_filename: video.original_filename,
+      file_size_bytes: video.file_size_bytes,
+      mime_type: video.mime_type,
+      duration_seconds: video.duration_seconds,
+      width: video.width,
+      height: video.height,
+      bitrate: video.bitrate,
+      codec: video.codec,
+      status: video.status,
+      processing_error: video.processing_error,
+      channel_id: video.channel_id,
+      created_at: video.created_at,
+      updated_at: video.updated_at,
     };
   }
 }

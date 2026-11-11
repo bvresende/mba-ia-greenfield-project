@@ -28,7 +28,6 @@ describe('VideosService (integration)', () => {
   let dataSource: DataSource;
   let videoRepository: Repository<Video>;
   let userRepository: Repository<User>;
-  let channelRepository: Repository<Channel>;
   let storageService: StorageService;
   let channelsService: ChannelsService;
   let videosService: VideosService;
@@ -39,7 +38,6 @@ describe('VideosService (integration)', () => {
     await dataSource.initialize();
     videoRepository = dataSource.getRepository(Video);
     userRepository = dataSource.getRepository(User);
-    channelRepository = dataSource.getRepository(Channel);
     channelsService = new ChannelsService(dataSource);
 
     const sCfg = storageConfig();
@@ -73,7 +71,10 @@ describe('VideosService (integration)', () => {
   });
 
   let counter = 0;
-  async function createUserAndChannel(): Promise<{ user: User; channel: Channel }> {
+  async function createUserAndChannel(): Promise<{
+    user: User;
+    channel: Channel;
+  }> {
     const user = await userRepository.save(
       userRepository.create({
         email: `video_test_${++counter}@example.com`,
@@ -408,6 +409,269 @@ describe('VideosService (integration)', () => {
         videosService.completeUpload(user.id, 'nonexistent9', {
           parts: [{ part_number: 1, etag: 'etag' }],
         }),
+      ).rejects.toThrow(VideoNotFoundException);
+    });
+  });
+
+  describe('getStreamUrl', () => {
+    it('returns presigned stream URL with inline disposition for READY video (anonymous)', async () => {
+      const { channel } = await createUserAndChannel();
+      const video = await videoRepository.save(
+        videoRepository.create({
+          slug: 'streamRdy01',
+          title: 'Ready Stream Video',
+          original_filename: 'sample.mp4',
+          file_size_bytes: 1048576,
+          mime_type: 'video/mp4',
+          status: VideoStatus.READY,
+          channel_id: channel.id,
+          storage_key: 'videos/stream-key/original.mp4',
+        }),
+      );
+
+      const url = await videosService.getStreamUrl(video.slug);
+      expect(url).toBeDefined();
+      expect(url).toContain('response-content-disposition=inline');
+      expect(url).toContain('X-Amz-Signature');
+    });
+
+    it('returns stream URL for channel owner when video is in PROCESSING status', async () => {
+      const { user, channel } = await createUserAndChannel();
+      const video = await videoRepository.save(
+        videoRepository.create({
+          slug: 'streamPrc01',
+          title: 'Processing Video',
+          original_filename: 'sample.mp4',
+          file_size_bytes: 1048576,
+          mime_type: 'video/mp4',
+          status: VideoStatus.PROCESSING,
+          channel_id: channel.id,
+          storage_key: 'videos/proc-key/original.mp4',
+        }),
+      );
+
+      const url = await videosService.getStreamUrl(video.slug, user.id);
+      expect(url).toBeDefined();
+      expect(url).toContain('response-content-disposition=inline');
+    });
+
+    it('throws VideoNotFoundException when non-owner requests PROCESSING video', async () => {
+      const { channel } = await createUserAndChannel();
+      const { user: otherUser } = await createUserAndChannel();
+      const video = await videoRepository.save(
+        videoRepository.create({
+          slug: 'streamPrc02',
+          title: 'Processing Video Other',
+          original_filename: 'sample.mp4',
+          file_size_bytes: 1048576,
+          mime_type: 'video/mp4',
+          status: VideoStatus.PROCESSING,
+          channel_id: channel.id,
+          storage_key: 'videos/proc-key/original.mp4',
+        }),
+      );
+
+      await expect(
+        videosService.getStreamUrl(video.slug, otherUser.id),
+      ).rejects.toThrow(VideoNotFoundException);
+
+      // Anonymous also gets 404
+      await expect(videosService.getStreamUrl(video.slug)).rejects.toThrow(
+        VideoNotFoundException,
+      );
+    });
+
+    it('throws VideoNotFoundException for DRAFT or FAILED video', async () => {
+      const { user, channel } = await createUserAndChannel();
+      const draft = await videoRepository.save(
+        videoRepository.create({
+          slug: 'streamDft01',
+          title: 'Draft Video',
+          original_filename: 'sample.mp4',
+          file_size_bytes: 1048576,
+          mime_type: 'video/mp4',
+          status: VideoStatus.DRAFT,
+          channel_id: channel.id,
+          storage_key: 'videos/dft-key/original.mp4',
+        }),
+      );
+
+      await expect(
+        videosService.getStreamUrl(draft.slug, user.id),
+      ).rejects.toThrow(VideoNotFoundException);
+
+      const failed = await videoRepository.save(
+        videoRepository.create({
+          slug: 'streamFld01',
+          title: 'Failed Video',
+          original_filename: 'sample.mp4',
+          file_size_bytes: 1048576,
+          mime_type: 'video/mp4',
+          status: VideoStatus.FAILED,
+          channel_id: channel.id,
+          storage_key: 'videos/fld-key/original.mp4',
+        }),
+      );
+
+      await expect(
+        videosService.getStreamUrl(failed.slug, user.id),
+      ).rejects.toThrow(VideoNotFoundException);
+    });
+  });
+
+  describe('getDownloadUrl', () => {
+    it('returns presigned download URL with attachment disposition and filename', async () => {
+      const { channel } = await createUserAndChannel();
+      const video = await videoRepository.save(
+        videoRepository.create({
+          slug: 'dlVideo001',
+          title: 'My Awesome Presentation',
+          original_filename: 'raw_video.mp4',
+          file_size_bytes: 1048576,
+          mime_type: 'video/mp4',
+          status: VideoStatus.READY,
+          channel_id: channel.id,
+          storage_key: 'videos/dl-key/original.mp4',
+        }),
+      );
+
+      const url = await videosService.getDownloadUrl(video.slug);
+      expect(url).toBeDefined();
+      expect(url).toContain('response-content-disposition=attachment');
+      expect(url).toContain('My_Awesome_Presentation.mp4');
+    });
+
+    it('throws VideoNotFoundException if video is not in READY status or does not exist', async () => {
+      const { channel } = await createUserAndChannel();
+      const video = await videoRepository.save(
+        videoRepository.create({
+          slug: 'dlNotRdy01',
+          title: 'Not Ready',
+          original_filename: 'sample.mp4',
+          file_size_bytes: 1048576,
+          mime_type: 'video/mp4',
+          status: VideoStatus.PROCESSING,
+          channel_id: channel.id,
+          storage_key: 'videos/notrdy-key/original.mp4',
+        }),
+      );
+
+      await expect(videosService.getDownloadUrl(video.slug)).rejects.toThrow(
+        VideoNotFoundException,
+      );
+      await expect(
+        videosService.getDownloadUrl('doesnotexist9'),
+      ).rejects.toThrow(VideoNotFoundException);
+    });
+  });
+
+  describe('getThumbnailUrl', () => {
+    it('returns presigned thumbnail URL for READY video with thumbnail_key', async () => {
+      const { channel } = await createUserAndChannel();
+      const video = await videoRepository.save(
+        videoRepository.create({
+          slug: 'thumbV001',
+          title: 'Video with Thumb',
+          original_filename: 'sample.mp4',
+          file_size_bytes: 1048576,
+          mime_type: 'video/mp4',
+          status: VideoStatus.READY,
+          channel_id: channel.id,
+          storage_key: 'videos/thumb-key/original.mp4',
+          thumbnail_key: 'videos/thumb-key/thumbnail.jpg',
+        }),
+      );
+
+      const url = await videosService.getThumbnailUrl(video.slug);
+      expect(url).toBeDefined();
+      expect(url).toContain('videos/thumb-key/thumbnail.jpg');
+      expect(url).toContain('X-Amz-Signature');
+    });
+
+    it('throws VideoNotFoundException if video does not have a thumbnail or is not READY', async () => {
+      const { channel } = await createUserAndChannel();
+      const noThumb = await videoRepository.save(
+        videoRepository.create({
+          slug: 'noThumb001',
+          title: 'No Thumb Video',
+          original_filename: 'sample.mp4',
+          file_size_bytes: 1048576,
+          mime_type: 'video/mp4',
+          status: VideoStatus.READY,
+          channel_id: channel.id,
+          storage_key: 'videos/nothumb/original.mp4',
+          thumbnail_key: null,
+        }),
+      );
+
+      await expect(videosService.getThumbnailUrl(noThumb.slug)).rejects.toThrow(
+        VideoNotFoundException,
+      );
+    });
+  });
+
+  describe('getMetadata', () => {
+    it('returns full video metadata when requested by channel owner', async () => {
+      const { user, channel } = await createUserAndChannel();
+      const video = await videoRepository.save(
+        videoRepository.create({
+          slug: 'metaVideo01',
+          title: 'Full Meta Video',
+          description: 'A rich description',
+          original_filename: 'orig.mp4',
+          file_size_bytes: 2048576,
+          mime_type: 'video/mp4',
+          duration_seconds: 120,
+          width: 1920,
+          height: 1080,
+          bitrate: 4500000,
+          codec: 'h264',
+          status: VideoStatus.READY,
+          channel_id: channel.id,
+          storage_key: 'videos/meta/original.mp4',
+          thumbnail_key: 'videos/meta/thumbnail.jpg',
+        }),
+      );
+
+      const meta = await videosService.getMetadata(user.id, video.slug);
+      expect(meta.id).toBe(video.id);
+      expect(meta.slug).toBe(video.slug);
+      expect(meta.title).toBe('Full Meta Video');
+      expect(meta.description).toBe('A rich description');
+      expect(meta.duration_seconds).toBe(120);
+      expect(meta.width).toBe(1920);
+      expect(meta.height).toBe(1080);
+      expect(meta.bitrate).toBe(4500000);
+      expect(meta.codec).toBe('h264');
+      expect(meta.status).toBe(VideoStatus.READY);
+      expect(meta.channel_id).toBe(channel.id);
+    });
+
+    it('throws VideoAccessDeniedException when requested by non-owner', async () => {
+      const { channel } = await createUserAndChannel();
+      const { user: otherUser } = await createUserAndChannel();
+      const video = await videoRepository.save(
+        videoRepository.create({
+          slug: 'metaDenied1',
+          title: 'Secret Video',
+          original_filename: 'orig.mp4',
+          file_size_bytes: 1048576,
+          mime_type: 'video/mp4',
+          status: VideoStatus.READY,
+          channel_id: channel.id,
+          storage_key: 'videos/sec/original.mp4',
+        }),
+      );
+
+      await expect(
+        videosService.getMetadata(otherUser.id, video.slug),
+      ).rejects.toThrow(VideoAccessDeniedException);
+    });
+
+    it('throws VideoNotFoundException when video does not exist', async () => {
+      const { user } = await createUserAndChannel();
+      await expect(
+        videosService.getMetadata(user.id, 'metaNotFound'),
       ).rejects.toThrow(VideoNotFoundException);
     });
   });

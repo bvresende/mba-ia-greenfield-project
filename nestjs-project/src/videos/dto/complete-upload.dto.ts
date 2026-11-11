@@ -2,7 +2,6 @@ import 'reflect-metadata';
 import {
   registerDecorator,
   ValidationOptions,
-  ValidationArguments,
   IsArray,
   ArrayMinSize,
   ValidateNested,
@@ -24,14 +23,14 @@ export class UploadPartDto {
 }
 
 export function IsAscendingParts(validationOptions?: ValidationOptions) {
-  return function (object: Object, propertyName: string) {
+  return function (object: object, propertyName: string) {
     registerDecorator({
       name: 'isAscendingParts',
       target: object.constructor,
       propertyName: propertyName,
       options: validationOptions,
       validator: {
-        validate(value: any, _args: ValidationArguments) {
+        validate(value: any) {
           if (!Array.isArray(value)) return false;
           for (let i = 0; i < value.length - 1; i++) {
             if (
@@ -58,7 +57,8 @@ export class CompleteUploadDto {
   @ValidateNested({ each: true })
   @Type(() => UploadPartDto)
   @IsAscendingParts({
-    message: 'parts must be ordered by part_number ascending without duplicates',
+    message:
+      'parts must be ordered by part_number ascending without duplicates',
   })
   parts: UploadPartDto[];
 }

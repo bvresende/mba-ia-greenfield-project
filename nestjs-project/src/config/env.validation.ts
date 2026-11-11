@@ -40,4 +40,3 @@ export const envValidationSchema = Joi.object({
   VIDEO_MAX_FILE_SIZE_BYTES: Joi.number().positive().default(10737418240),
   VIDEO_PART_SIZE_BYTES: Joi.number().positive().default(67108864),
 });
-

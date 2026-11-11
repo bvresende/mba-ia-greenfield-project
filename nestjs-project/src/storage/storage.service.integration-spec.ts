@@ -41,7 +41,13 @@ describe('StorageService (Integration)', () => {
     expect(typeof uploadId).toBe('string');
 
     // 2. Generate presigned part URL (using internal endpoint for in-container fetch)
-    const part1Url = await service.getPresignedPartUrl(key, uploadId, 1, 300, true);
+    const part1Url = await service.getPresignedPartUrl(
+      key,
+      uploadId,
+      1,
+      300,
+      true,
+    );
     expect(part1Url).toContain('http://minio:9000');
     expect(part1Url).toContain('partNumber=1');
     expect(part1Url).toContain(`uploadId=${encodeURIComponent(uploadId)}`);
@@ -72,7 +78,11 @@ describe('StorageService (Integration)', () => {
     ).resolves.not.toThrow();
 
     // 6. Presigned GET URL (inline and attachment)
-    const streamUrl = await service.getPresignedGetUrl(key, { disposition: 'inline' }, true);
+    const streamUrl = await service.getPresignedGetUrl(
+      key,
+      { disposition: 'inline' },
+      true,
+    );
     expect(streamUrl).toContain('response-content-disposition=inline');
 
     const downloadUrl = await service.getPresignedGetUrl(
@@ -86,7 +96,9 @@ describe('StorageService (Integration)', () => {
     // 7. Verify fetching the uploaded object returns 200 and correct length
     const getRes = await fetch(streamUrl);
     expect(getRes.status).toBe(200);
-    expect(parseInt(getRes.headers.get('content-length') || '0', 10)).toBe(5 * 1024 * 1024);
+    expect(parseInt(getRes.headers.get('content-length') || '0', 10)).toBe(
+      5 * 1024 * 1024,
+    );
   });
 
   it('should upload a buffer and retrieve it successfully', async () => {
@@ -95,7 +107,11 @@ describe('StorageService (Integration)', () => {
 
     await service.uploadBuffer(key, buffer, 'image/jpeg');
 
-    const url = await service.getPresignedGetUrl(key, { disposition: 'inline' }, true);
+    const url = await service.getPresignedGetUrl(
+      key,
+      { disposition: 'inline' },
+      true,
+    );
     const res = await fetch(url);
     expect(res.status).toBe(200);
     const downloaded = Buffer.from(await res.arrayBuffer());
@@ -106,7 +122,9 @@ describe('StorageService (Integration)', () => {
     const key = `integration-tests/abort-${Date.now()}.mp4`;
     const uploadId = await service.createMultipartUpload(key, 'video/mp4');
 
-    await expect(service.abortMultipartUpload(key, uploadId)).resolves.not.toThrow();
+    await expect(
+      service.abortMultipartUpload(key, uploadId),
+    ).resolves.not.toThrow();
 
     // Listing parts after abort should fail
     await expect(service.listParts(key, uploadId)).rejects.toThrow();

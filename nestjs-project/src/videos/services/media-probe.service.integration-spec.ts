@@ -55,8 +55,8 @@ describe('MediaProbeService (integration)', () => {
   });
 
   it('rejects with error when file does not exist', async () => {
-    await expect(service.probe('/tmp/nonexistent-media-file.mp4')).rejects.toThrow(
-      /MEDIA_PROBE_FAILED/,
-    );
+    await expect(
+      service.probe('/tmp/nonexistent-media-file.mp4'),
+    ).rejects.toThrow(/MEDIA_PROBE_FAILED/);
   });
 });
