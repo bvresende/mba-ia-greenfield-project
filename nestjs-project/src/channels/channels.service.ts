@@ -59,4 +59,14 @@ export class ChannelsService {
       );
     });
   }
+
+  async findByUserId(userId: string): Promise<Channel | null> {
+    const repository = this.dataSource.getRepository(Channel);
+    return repository.findOne({ where: { user_id: userId } });
+  }
+
+  async findById(id: string): Promise<Channel | null> {
+    const repository = this.dataSource.getRepository(Channel);
+    return repository.findOne({ where: { id } });
+  }
 }

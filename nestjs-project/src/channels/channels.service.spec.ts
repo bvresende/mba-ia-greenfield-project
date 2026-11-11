@@ -132,4 +132,55 @@ describe('ChannelsService', () => {
       expect(manager.save).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe('findByUserId', () => {
+    it('returns channel when found by user_id', async () => {
+      const channel = makeChannel('mychannel');
+      const repo = {
+        findOne: jest.fn().mockResolvedValue(channel),
+      };
+      const dataSource = {
+        getRepository: jest.fn().mockReturnValue(repo),
+      };
+      const service = new ChannelsService(dataSource as any);
+
+      const result = await service.findByUserId('user-123');
+      expect(repo.findOne).toHaveBeenCalledWith({
+        where: { user_id: 'user-123' },
+      });
+      expect(result).toBe(channel);
+    });
+
+    it('returns null when channel not found for user_id', async () => {
+      const repo = {
+        findOne: jest.fn().mockResolvedValue(null),
+      };
+      const dataSource = {
+        getRepository: jest.fn().mockReturnValue(repo),
+      };
+      const service = new ChannelsService(dataSource as any);
+
+      const result = await service.findByUserId('user-none');
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('findById', () => {
+    it('returns channel when found by id', async () => {
+      const channel = makeChannel('mychannel');
+      const repo = {
+        findOne: jest.fn().mockResolvedValue(channel),
+      };
+      const dataSource = {
+        getRepository: jest.fn().mockReturnValue(repo),
+      };
+      const service = new ChannelsService(dataSource as any);
+
+      const result = await service.findById('chan-123');
+      expect(repo.findOne).toHaveBeenCalledWith({
+        where: { id: 'chan-123' },
+      });
+      expect(result).toBe(channel);
+    });
+  });
 });
