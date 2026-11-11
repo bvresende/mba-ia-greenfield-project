@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 3/12 completed
+**SIs:** 4/12 completed
 
 ### SI-03.1 — Setup de Infraestrutura (MinIO, Redis, Dockerfile e Configs)
 - **Status:** completed
@@ -19,8 +19,8 @@
 - **Observations:** none
 
 ### SI-03.4 — Utilitário de Slug e Resolução de Canal
-- **Status:** pending
-- **Tests:** no tests
+- **Status:** completed
+- **Tests:** 17 passing
 - **Observations:** none
 
 ### SI-03.5 — Endpoint de Pré-cadastro de Vídeo (POST /videos)
