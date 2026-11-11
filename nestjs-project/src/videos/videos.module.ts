@@ -38,6 +38,7 @@ import { ThumbnailService } from './services/thumbnail.service';
     ThumbnailService,
     TypeOrmModule,
     BullModule,
+    StorageModule,
   ],
 })
 export class VideosModule {}

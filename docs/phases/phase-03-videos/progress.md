@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 8/12 completed
+**SIs:** 9/12 completed
 
 ### SI-03.1 — Setup de Infraestrutura (MinIO, Redis, Dockerfile e Configs)
 - **Status:** completed
@@ -44,8 +44,8 @@
 - **Observations:** none
 
 ### SI-03.9 — VideoProcessor e Worker de Processamento em Background
-- **Status:** pending
-- **Tests:** no tests
+- **Status:** completed
+- **Tests:** 3 passing
 - **Observations:** none
 
 ### SI-03.10 — Endpoints de Streaming, Download, Thumbnail e Metadados
