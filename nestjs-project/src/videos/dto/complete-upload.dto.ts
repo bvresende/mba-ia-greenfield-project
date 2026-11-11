@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import {
   registerDecorator,
   ValidationOptions,
+  ValidationArguments,
   IsArray,
   ArrayMinSize,
   ValidateNested,
