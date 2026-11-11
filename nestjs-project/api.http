@@ -118,3 +118,73 @@ Content-Type: {{contentType}}
   "token": "{{resetToken}}",
   "new_password": "new-password123"
 }
+
+
+###
+# ─────────────────────────────────────────────
+# VÍDEOS (UPLOAD, STREAMING E METADADOS)
+# ─────────────────────────────────────────────
+
+@videoSlug = {{createVideo.response.body.$.slug}}
+
+### 10. Pré-cadastrar rascunho de vídeo
+# @name createVideo
+POST {{baseUrl}}/videos
+Content-Type: {{contentType}}
+Authorization: Bearer {{accessToken}}
+
+{
+  "title": "Meu Primeiro Vídeo",
+  "description": "Demonstração de upload multipart na StreamTube",
+  "original_filename": "sample.mp4",
+  "file_size_bytes": 10485760,
+  "mime_type": "video/mp4"
+}
+
+
+### 11. Obter URLs pré-assinadas para envio de partes (multipart)
+POST {{baseUrl}}/videos/{{videoSlug}}/upload/part-urls
+Content-Type: {{contentType}}
+Authorization: Bearer {{accessToken}}
+
+{
+  "part_numbers": [1, 2]
+}
+
+
+### 12. Listar partes já enviadas para o Object Storage
+GET {{baseUrl}}/videos/{{videoSlug}}/upload/parts
+Authorization: Bearer {{accessToken}}
+
+
+### 13. Concluir upload multipart e disparar processamento em background
+POST {{baseUrl}}/videos/{{videoSlug}}/upload/complete
+Content-Type: {{contentType}}
+Authorization: Bearer {{accessToken}}
+
+{
+  "parts": [
+    {
+      "part_number": 1,
+      "etag": "d41d8cd98f00b204e9800998ecf8427e"
+    }
+  ]
+}
+
+
+### 14. Consultar metadados e status do vídeo (canal proprietário)
+GET {{baseUrl}}/videos/{{videoSlug}}
+Authorization: Bearer {{accessToken}}
+
+
+### 15. Streaming do vídeo (302 redirect para Object Storage com suporte a Range)
+GET {{baseUrl}}/videos/{{videoSlug}}/stream
+
+
+### 16. Download do arquivo original (302 redirect com attachment disposition)
+GET {{baseUrl}}/videos/{{videoSlug}}/download
+
+
+### 17. Obter imagem de capa / thumbnail (302 redirect)
+GET {{baseUrl}}/videos/{{videoSlug}}/thumbnail
+
