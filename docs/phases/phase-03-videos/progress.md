@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
-**Status:** in_progress
-**SIs:** 11/12 completed
+**Status:** completed
+**SIs:** 12/12 completed
 
 ### SI-03.1 — Setup de Infraestrutura (MinIO, Redis, Dockerfile e Configs)
 - **Status:** completed
@@ -59,6 +59,6 @@
 - **Observations:** none
 
 ### SI-03.12 — Script de Smoke Test de Upload e Sincronização OpenAPI
-- **Status:** pending
-- **Tests:** no tests
+- **Status:** completed
+- **Tests:** smoke test passed
 - **Observations:** none
