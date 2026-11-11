@@ -9,6 +9,9 @@ import { StorageModule } from '../storage/storage.module';
 import { ChannelsModule } from '../channels/channels.module';
 import videoConfig from '../config/video.config';
 
+import { MediaProbeService } from './services/media-probe.service';
+import { ThumbnailService } from './services/thumbnail.service';
+
 @Module({
   imports: [
     TypeOrmModule.forFeature([Video]),
@@ -28,7 +31,13 @@ import videoConfig from '../config/video.config';
     ConfigModule.forFeature(videoConfig),
   ],
   controllers: [VideosController],
-  providers: [VideosService],
-  exports: [VideosService, TypeOrmModule, BullModule],
+  providers: [VideosService, MediaProbeService, ThumbnailService],
+  exports: [
+    VideosService,
+    MediaProbeService,
+    ThumbnailService,
+    TypeOrmModule,
+    BullModule,
+  ],
 })
 export class VideosModule {}
