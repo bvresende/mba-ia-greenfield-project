@@ -19,7 +19,7 @@ This is a monorepo with two main areas:
 
 - `nestjs-project/` — Backend API (NestJS 11, TypeScript, Express). Contains modules for users, channels, videos, comments, etc.
 - `docs/` — Project documentation, architecture diagrams, and planning.
-- `next-frontend/` (Next.js) — not yet initialized
+- `next-frontend/` (Next.js) — Frontend application (Next.js App Router, React Server Components)
 
 ## Architecture (C4 Container Diagram)
 
@@ -27,11 +27,26 @@ See `docs/diagrams/software-arch.mermaid` for the full diagram. Key containers:
 
 - **Frontend** (Next.js) → calls API via REST, streams from Object Storage
 - **API** (Nest.js) → business rules, auth, reads/writes DB, uploads to storage, publishes jobs to queue, sends emails
-- **Video Worker** (FFmpeg) → consumes jobs from queue, processes videos, updates DB and storage
-- **Database** (PostgreSQL) → users, channels, videos, comments, likes
-- **Object Storage** (S3/MinIO) → video files and thumbnails
-- **Message Queue** (TBD) → video processing job queue
-- **Email Service** (SMTP) → account confirmation and password recovery
+- **Video Worker** (Standalone NestJS + FFmpeg/FFprobe) → consumes jobs from BullMQ queue, extracts video duration/metadata, generates thumbnails, updates DB and storage
+- **Database** (PostgreSQL 17) → users, channels, videos, comments, likes
+- **Object Storage** (MinIO / S3) → video files (`videos/{videoId}/original.{ext}`) and thumbnails (`videos/{videoId}/thumbnail.jpg`)
+- **Message Queue** (BullMQ + Redis 7) → video processing job queue (`video-processing`)
+- **Email Service** (Mailpit / SMTP) → account confirmation and password recovery
+
+## Video Upload and Processing (Phase 03)
+
+The platform supports video uploads of up to 10GB via direct-to-storage multipart presigned URLs:
+
+- **10GB Multipart Upload:** Client obtains presigned URLs from `/videos/:slug/upload/part-urls` and uploads chunks directly to Object Storage (MinIO/S3). Zero media upload bandwidth or memory overhead on the NestJS API server.
+- **Draft Pre-Registration:** Upload starts by creating a record in `DRAFT` status (`POST /videos`) with an 11-character URL-safe unique slug (e.g. `dQw4w9WgXcQ`).
+- **Asynchronous Background Processing:** Upon upload completion (`POST /videos/:slug/upload/complete`), the video transitions to `PROCESSING` and a job is dispatched to BullMQ with deterministic deduplication (`jobId = video.id`).
+- **Worker & Media Tools:** Dedicated `video-worker` container executes native FFprobe to extract technical metadata (duration, resolution, codec, bitrate) and native FFmpeg to generate JPEG thumbnails.
+- **Status Lifecycle:** `DRAFT` → `PROCESSING` → `READY` (or `FAILED` with `processing_error`).
+- **Streaming & Delivery:**
+  - `GET /videos/:slug/stream`: 302 Found redirect to presigned MinIO URL with `response-content-disposition=inline`, supporting HTTP Range requests (`206 Partial Content`).
+  - `GET /videos/:slug/download`: 302 Found redirect to presigned MinIO URL with `response-content-disposition=attachment; filename="..."`.
+  - `GET /videos/:slug/thumbnail`: 302 Found redirect to presigned thumbnail image URL.
+  - `GET /videos/:slug`: Channel owner-only access to full video metadata and processing status.
 
 ## Docker Networking
 
