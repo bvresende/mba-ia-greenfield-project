@@ -1,4 +1,5 @@
 import { DataSource, Repository } from 'typeorm';
+import { Queue } from 'bullmq';
 import {
   ALL_ENTITIES,
   cleanAllTables,
@@ -20,6 +21,7 @@ import {
   VideoNotFoundException,
   VideoAccessDeniedException,
   InvalidVideoStateException,
+  UploadIncompleteException,
 } from '../common/exceptions/domain.exception';
 
 describe('VideosService (integration)', () => {
@@ -30,6 +32,7 @@ describe('VideosService (integration)', () => {
   let storageService: StorageService;
   let channelsService: ChannelsService;
   let videosService: VideosService;
+  let videoQueue: Queue;
 
   beforeAll(async () => {
     dataSource = createTestDataSource(ALL_ENTITIES);
@@ -43,16 +46,25 @@ describe('VideosService (integration)', () => {
     storageService = new StorageService(sCfg);
     await storageService.ensureBucketExists();
 
+    videoQueue = new Queue('video-processing', {
+      connection: {
+        host: process.env.REDIS_HOST || 'redis',
+        port: parseInt(process.env.REDIS_PORT || '6379', 10),
+      },
+    });
+
     const vCfg = videoConfig();
     videosService = new VideosService(
       videoRepository,
       storageService,
       channelsService,
       vCfg,
+      videoQueue,
     );
   });
 
   afterAll(async () => {
+    await videoQueue.close();
     await dataSource.destroy();
   });
 
@@ -284,6 +296,119 @@ describe('VideosService (integration)', () => {
       await expect(
         videosService.listUploadedParts(user.id, draft.slug),
       ).rejects.toThrow(InvalidVideoStateException);
+    });
+  });
+
+  describe('completeUpload', () => {
+    it('completes upload, updates status to PROCESSING and enqueues job with jobId = video.id', async () => {
+      const { user } = await createUserAndChannel();
+      const draft = await videosService.createDraft(user.id, {
+        title: 'Video To Complete',
+        original_filename: 'sample.mp4',
+        file_size_bytes: 5242880,
+        mime_type: 'video/mp4',
+      });
+
+      // Upload real chunk to MinIO
+      const part1Url = await storageService.getPresignedPartUrl(
+        `videos/${draft.id}/original.mp4`,
+        draft.upload_id,
+        1,
+        300,
+        true,
+      );
+
+      const chunk = Buffer.alloc(5 * 1024 * 1024, 'v');
+      const putRes = await fetch(part1Url, {
+        method: 'PUT',
+        body: chunk,
+        headers: { 'Content-Type': 'application/octet-stream' },
+      });
+      expect(putRes.status).toBe(200);
+      const etag = putRes.headers.get('etag')!.replace(/"/g, '');
+
+      // Complete upload
+      const res = await videosService.completeUpload(user.id, draft.slug, {
+        parts: [{ part_number: 1, etag }],
+      });
+
+      expect(res.slug).toBe(draft.slug);
+      expect(res.status).toBe(VideoStatus.PROCESSING);
+
+      // Verify DB status
+      const updatedVideo = await videoRepository.findOne({
+        where: { id: draft.id },
+      });
+      expect(updatedVideo!.status).toBe(VideoStatus.PROCESSING);
+
+      // Verify BullMQ job
+      const job = await videoQueue.getJob(draft.id);
+      expect(job).toBeDefined();
+      expect(job!.name).toBe('process-video');
+      expect(job!.id).toBe(draft.id);
+      expect(job!.data).toEqual({ videoId: draft.id });
+    });
+
+    it('throws UploadIncompleteException with invalid parts or missing etags', async () => {
+      const { user } = await createUserAndChannel();
+      const draft = await videosService.createDraft(user.id, {
+        title: 'Failing Video',
+        original_filename: 'sample.mp4',
+        file_size_bytes: 1048576,
+        mime_type: 'video/mp4',
+      });
+
+      await expect(
+        videosService.completeUpload(user.id, draft.slug, {
+          parts: [{ part_number: 1, etag: 'invalid-nonexistent-etag' }],
+        }),
+      ).rejects.toThrow(UploadIncompleteException);
+    });
+
+    it('throws VideoAccessDeniedException when called by non-owner', async () => {
+      const { user: owner } = await createUserAndChannel();
+      const { user: otherUser } = await createUserAndChannel();
+      const draft = await videosService.createDraft(owner.id, {
+        title: 'Owned Video',
+        original_filename: 'sample.mp4',
+        file_size_bytes: 1048576,
+        mime_type: 'video/mp4',
+      });
+
+      await expect(
+        videosService.completeUpload(otherUser.id, draft.slug, {
+          parts: [{ part_number: 1, etag: 'etag' }],
+        }),
+      ).rejects.toThrow(VideoAccessDeniedException);
+    });
+
+    it('throws InvalidVideoStateException when video is not in DRAFT status', async () => {
+      const { user } = await createUserAndChannel();
+      const draft = await videosService.createDraft(user.id, {
+        title: 'Already Ready Video',
+        original_filename: 'sample.mp4',
+        file_size_bytes: 1048576,
+        mime_type: 'video/mp4',
+      });
+
+      await videoRepository.update(draft.id, {
+        status: VideoStatus.READY,
+      });
+
+      await expect(
+        videosService.completeUpload(user.id, draft.slug, {
+          parts: [{ part_number: 1, etag: 'etag' }],
+        }),
+      ).rejects.toThrow(InvalidVideoStateException);
+    });
+
+    it('throws VideoNotFoundException when video does not exist', async () => {
+      const { user } = await createUserAndChannel();
+      await expect(
+        videosService.completeUpload(user.id, 'nonexistent9', {
+          parts: [{ part_number: 1, etag: 'etag' }],
+        }),
+      ).rejects.toThrow(VideoNotFoundException);
     });
   });
 });

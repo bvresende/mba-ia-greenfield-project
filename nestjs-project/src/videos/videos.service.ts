@@ -2,11 +2,14 @@ import { Injectable, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { type ConfigType } from '@nestjs/config';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue } from 'bullmq';
 import { randomUUID } from 'crypto';
 import { Video } from './entities/video.entity';
 import { VideoStatus } from './enums/video-status.enum';
 import { CreateVideoDto, ALLOWED_MIME_TYPES } from './dto/create-video.dto';
 import { GetPartUrlsDto } from './dto/get-part-urls.dto';
+import { CompleteUploadDto } from './dto/complete-upload.dto';
 import { StorageService } from '../storage/storage.service';
 import { ChannelsService } from '../channels/channels.service';
 import videoConfig from '../config/video.config';
@@ -18,6 +21,7 @@ import {
   VideoNotFoundException,
   VideoAccessDeniedException,
   InvalidVideoStateException,
+  UploadIncompleteException,
 } from '../common/exceptions/domain.exception';
 
 export interface CreateDraftResponse {
@@ -49,6 +53,16 @@ export interface ListUploadedPartsResponse {
   parts: UploadedPartResponseItem[];
 }
 
+export interface CompleteUploadResponse {
+  slug: string;
+  status: VideoStatus;
+  message: string;
+}
+
+export interface VideoProcessingJobData {
+  videoId: string;
+}
+
 @Injectable()
 export class VideosService {
   constructor(
@@ -58,6 +72,8 @@ export class VideosService {
     private readonly channelsService: ChannelsService,
     @Inject(videoConfig.KEY)
     private readonly config: ConfigType<typeof videoConfig>,
+    @InjectQueue('video-processing')
+    private readonly videoQueue: Queue,
   ) {}
 
   async createDraft(
@@ -183,6 +199,44 @@ export class VideosService {
         etag: item.etag,
         size_bytes: item.sizeBytes,
       })),
+    };
+  }
+
+  async completeUpload(
+    userId: string,
+    slug: string,
+    dto: CompleteUploadDto,
+  ): Promise<CompleteUploadResponse> {
+    const video = await this.getOwnedVideo(userId, slug);
+    if (video.status !== VideoStatus.DRAFT) {
+      throw new InvalidVideoStateException();
+    }
+
+    try {
+      await this.storageService.completeMultipartUpload(
+        video.storage_key,
+        video.upload_id!,
+        dto.parts,
+      );
+    } catch (err: any) {
+      throw new UploadIncompleteException(
+        err?.message || 'Upload parts are incomplete or missing',
+      );
+    }
+
+    video.status = VideoStatus.PROCESSING;
+    await this.videoRepository.save(video);
+
+    await this.videoQueue.add(
+      'process-video',
+      { videoId: video.id },
+      { jobId: video.id },
+    );
+
+    return {
+      slug: video.slug,
+      status: video.status,
+      message: 'Upload completed and processing initiated',
     };
   }
 }

@@ -21,9 +21,11 @@ import {
   CreateDraftResponse,
   GetPartUrlsResponse,
   ListUploadedPartsResponse,
+  CompleteUploadResponse,
 } from './videos.service';
 import { CreateVideoDto } from './dto/create-video.dto';
 import { GetPartUrlsDto } from './dto/get-part-urls.dto';
+import { CompleteUploadDto } from './dto/complete-upload.dto';
 import { ApiErrorEnvelope } from '../common/openapi/api-error-envelope.dto';
 
 @ApiTags('videos')
@@ -156,6 +158,58 @@ export class VideosController {
     @Param('slug') slug: string,
   ): Promise<ListUploadedPartsResponse> {
     return this.videosService.listUploadedParts(user.sub, slug);
+  }
+
+  @Post(':slug/upload/complete')
+  @HttpCode(HttpStatus.OK)
+  @ApiBearerAuth('access-token')
+  @ApiOperation({
+    summary: 'Complete multipart upload and enqueue video processing',
+    description:
+      'Finalizes S3 multipart upload with the provided parts, updates video status to PROCESSING, and enqueues background processing job.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Upload completed and processing enqueued',
+    schema: {
+      properties: {
+        slug: { type: 'string' },
+        status: { type: 'string', example: 'PROCESSING' },
+        message: { type: 'string' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Upload incomplete or parts invalid',
+    schema: { $ref: getSchemaPath(ApiErrorEnvelope) },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Missing or invalid access token',
+    schema: { $ref: getSchemaPath(ApiErrorEnvelope) },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'User does not own this video',
+    schema: { $ref: getSchemaPath(ApiErrorEnvelope) },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Video not found',
+    schema: { $ref: getSchemaPath(ApiErrorEnvelope) },
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Video is not in DRAFT status',
+    schema: { $ref: getSchemaPath(ApiErrorEnvelope) },
+  })
+  async completeUpload(
+    @CurrentUser() user: JwtPayload,
+    @Param('slug') slug: string,
+    @Body() dto: CompleteUploadDto,
+  ): Promise<CompleteUploadResponse> {
+    return this.videosService.completeUpload(user.sub, slug, dto);
   }
 }
 
