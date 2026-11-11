@@ -6,6 +6,7 @@ import { randomUUID } from 'crypto';
 import { Video } from './entities/video.entity';
 import { VideoStatus } from './enums/video-status.enum';
 import { CreateVideoDto, ALLOWED_MIME_TYPES } from './dto/create-video.dto';
+import { GetPartUrlsDto } from './dto/get-part-urls.dto';
 import { StorageService } from '../storage/storage.service';
 import { ChannelsService } from '../channels/channels.service';
 import videoConfig from '../config/video.config';
@@ -26,6 +27,26 @@ export interface CreateDraftResponse {
   status: VideoStatus;
   upload_id: string;
   part_size_bytes: number;
+}
+
+export interface PartUrlItem {
+  part_number: number;
+  url: string;
+}
+
+export interface GetPartUrlsResponse {
+  parts: PartUrlItem[];
+}
+
+export interface UploadedPartResponseItem {
+  part_number: number;
+  etag: string;
+  size_bytes: number;
+}
+
+export interface ListUploadedPartsResponse {
+  upload_id: string;
+  parts: UploadedPartResponseItem[];
 }
 
 @Injectable()
@@ -100,5 +121,68 @@ export class VideosService {
 
   async findBySlug(slug: string): Promise<Video | null> {
     return this.videoRepository.findOne({ where: { slug } });
+  }
+
+  async getOwnedVideo(userId: string, slug: string): Promise<Video> {
+    const video = await this.findBySlug(slug);
+    if (!video) {
+      throw new VideoNotFoundException();
+    }
+    const channel = await this.channelsService.findByUserId(userId);
+    if (!channel || channel.id !== video.channel_id) {
+      throw new VideoAccessDeniedException();
+    }
+    return video;
+  }
+
+  async getPartUrls(
+    userId: string,
+    slug: string,
+    dto: GetPartUrlsDto,
+  ): Promise<GetPartUrlsResponse> {
+    const video = await this.getOwnedVideo(userId, slug);
+    if (video.status !== VideoStatus.DRAFT) {
+      throw new InvalidVideoStateException();
+    }
+
+    const parts = await Promise.all(
+      dto.part_numbers.map(async (partNumber) => {
+        const url = await this.storageService.getPresignedPartUrl(
+          video.storage_key,
+          video.upload_id!,
+          partNumber,
+        );
+        return {
+          part_number: partNumber,
+          url,
+        };
+      }),
+    );
+
+    return { parts };
+  }
+
+  async listUploadedParts(
+    userId: string,
+    slug: string,
+  ): Promise<ListUploadedPartsResponse> {
+    const video = await this.getOwnedVideo(userId, slug);
+    if (video.status !== VideoStatus.DRAFT) {
+      throw new InvalidVideoStateException();
+    }
+
+    const items = await this.storageService.listParts(
+      video.storage_key,
+      video.upload_id!,
+    );
+
+    return {
+      upload_id: video.upload_id!,
+      parts: items.map((item) => ({
+        part_number: item.partNumber,
+        etag: item.etag,
+        size_bytes: item.sizeBytes,
+      })),
+    };
   }
 }

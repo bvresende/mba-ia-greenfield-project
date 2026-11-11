@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 5/12 completed
+**SIs:** 6/12 completed
 
 ### SI-03.1 — Setup de Infraestrutura (MinIO, Redis, Dockerfile e Configs)
 - **Status:** completed
@@ -29,8 +29,8 @@
 - **Observations:** none
 
 ### SI-03.6 — Endpoints de Part URLs e Inspeção de Upload
-- **Status:** pending
-- **Tests:** no tests
+- **Status:** completed
+- **Tests:** 18 passing
 - **Observations:** none
 
 ### SI-03.7 — Endpoint de Conclusão de Upload e Enfileiramento

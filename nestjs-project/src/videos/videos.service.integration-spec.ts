@@ -17,6 +17,9 @@ import {
   ChannelRequiredException,
   FileTooLargeException,
   InvalidFileTypeException,
+  VideoNotFoundException,
+  VideoAccessDeniedException,
+  InvalidVideoStateException,
 } from '../common/exceptions/domain.exception';
 
 describe('VideosService (integration)', () => {
@@ -162,6 +165,125 @@ describe('VideosService (integration)', () => {
     it('returns null when slug does not exist', async () => {
       const found = await videosService.findBySlug('nonexistent1');
       expect(found).toBeNull();
+    });
+  });
+
+  describe('getPartUrls', () => {
+    it('returns presigned URLs containing valid signature parameters for requested parts', async () => {
+      const { user } = await createUserAndChannel();
+      const draft = await videosService.createDraft(user.id, {
+        title: 'Video with Parts',
+        original_filename: 'sample.mp4',
+        file_size_bytes: 1048576,
+        mime_type: 'video/mp4',
+      });
+
+      const res = await videosService.getPartUrls(user.id, draft.slug, {
+        part_numbers: [1, 2],
+      });
+
+      expect(res.parts).toHaveLength(2);
+      expect(res.parts[0].part_number).toBe(1);
+      expect(res.parts[0].url).toContain('partNumber=1');
+      expect(res.parts[0].url).toContain('X-Amz-Signature');
+      expect(res.parts[1].part_number).toBe(2);
+      expect(res.parts[1].url).toContain('partNumber=2');
+      expect(res.parts[1].url).toContain('X-Amz-Signature');
+    });
+
+    it('throws VideoAccessDeniedException when called by non-owner', async () => {
+      const { user: owner } = await createUserAndChannel();
+      const { user: otherUser } = await createUserAndChannel();
+      const draft = await videosService.createDraft(owner.id, {
+        title: 'Owned Video',
+        original_filename: 'sample.mp4',
+        file_size_bytes: 1048576,
+        mime_type: 'video/mp4',
+      });
+
+      await expect(
+        videosService.getPartUrls(otherUser.id, draft.slug, {
+          part_numbers: [1],
+        }),
+      ).rejects.toThrow(VideoAccessDeniedException);
+    });
+
+    it('throws InvalidVideoStateException when video is not in DRAFT status', async () => {
+      const { user } = await createUserAndChannel();
+      const draft = await videosService.createDraft(user.id, {
+        title: 'Processing Video',
+        original_filename: 'sample.mp4',
+        file_size_bytes: 1048576,
+        mime_type: 'video/mp4',
+      });
+
+      await videoRepository.update(draft.id, {
+        status: VideoStatus.READY,
+      });
+
+      await expect(
+        videosService.getPartUrls(user.id, draft.slug, {
+          part_numbers: [1],
+        }),
+      ).rejects.toThrow(InvalidVideoStateException);
+    });
+
+    it('throws VideoNotFoundException when slug does not exist', async () => {
+      const { user } = await createUserAndChannel();
+      await expect(
+        videosService.getPartUrls(user.id, 'not_found_1', {
+          part_numbers: [1],
+        }),
+      ).rejects.toThrow(VideoNotFoundException);
+    });
+  });
+
+  describe('listUploadedParts', () => {
+    it('returns empty parts array when no parts uploaded yet', async () => {
+      const { user } = await createUserAndChannel();
+      const draft = await videosService.createDraft(user.id, {
+        title: 'Empty Parts Video',
+        original_filename: 'sample.mp4',
+        file_size_bytes: 1048576,
+        mime_type: 'video/mp4',
+      });
+
+      const res = await videosService.listUploadedParts(user.id, draft.slug);
+      expect(res.upload_id).toBe(draft.upload_id);
+      expect(res.parts).toEqual([]);
+    });
+
+    it('throws VideoAccessDeniedException when called by non-owner', async () => {
+      const { user: owner } = await createUserAndChannel();
+      const { user: otherUser } = await createUserAndChannel();
+      const draft = await videosService.createDraft(owner.id, {
+        title: 'Private Video',
+        original_filename: 'sample.mp4',
+        file_size_bytes: 1048576,
+        mime_type: 'video/mp4',
+      });
+
+      await expect(
+        videosService.listUploadedParts(otherUser.id, draft.slug),
+      ).rejects.toThrow(VideoAccessDeniedException);
+    });
+
+    it('throws InvalidVideoStateException when video is not in DRAFT status', async () => {
+      const { user } = await createUserAndChannel();
+      const draft = await videosService.createDraft(user.id, {
+        title: 'Non-draft Video',
+        original_filename: 'sample.mp4',
+        file_size_bytes: 1048576,
+        mime_type: 'video/mp4',
+      });
+
+      await videoRepository.update(draft.id, {
+        status: VideoStatus.FAILED,
+      });
+
+      await expect(
+        videosService.listUploadedParts(user.id, draft.slug),
+      ).rejects.toThrow(InvalidVideoStateException);
     });
   });
 });
